@@ -30,9 +30,6 @@ execute:
 # Load the Dataset
 
 ```{python}
-#| label: setup
-#| include: false
-#| echo: true
 import os, sys
 os.environ["PYSPARK_PYTHON"] = sys.executable
 os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
@@ -45,35 +42,32 @@ from pyspark.sql import functions as F
 import pandas as pd
 import numpy as np
 import plotly.io as pio
-
+from IPython.display import Image, display
+def show_and_save(fig, path, width=950, height=550, scale=2):
+    png_bytes = fig.to_image(format="png", width=width, height=height, scale=scale)
+    with open(path, "wb") as f:
+        f.write(png_bytes)
+    display(Image(png_bytes)) 
 np.random.seed(42)
-pio.renderers.default = "notebook"
-
 # Initialize Spark Session
 spark = SparkSession.builder.appName("LightcastData").getOrCreate()
 # Load Data
 df = spark.read.option("header", "true").option("inferSchema", "true").option("multiLine","true").option("escape", "\"").csv("./data/lightcast_job_postings.csv")
 df.createOrReplaceTempView("job_postings")
-
 # Show Schema and Sample Data
 #print("---This is Diagnostic check, No need to print it in the final doc---")
 df.printSchema() # comment this line when rendering the submission
 #df.show(5)
-
 df = df.withColumn("SALARY", col("SALARY").cast("float")) \
        .withColumn("MAX_YEARS_EXPERIENCE", col("MAX_YEARS_EXPERIENCE").cast("float"))
 
 def compute_median(sdf, col_name):
     q = sdf.approxQuantile(col_name, [0.5], 0.01)
     return q[0] if q else None
-
 median_salary = compute_median(df, "SALARY")
 print("Median SALARY:", median_salary)
-
 df = df.fillna({"SALARY": median_salary})
-
 df = df.withColumn("Average_Salary", col("SALARY"))
-
 export_cols = [
     "EDUCATION_LEVELS_NAME",
     "REMOTE_TYPE_NAME",
@@ -84,7 +78,6 @@ export_cols = [
     "EMPLOYMENT_TYPE_NAME"
 ]
 df_selected = df.select(*export_cols)
-
 pdf= df_selected.toPandas()
 pdf.to_csv("./output/cleaned_subset.csv", index=False)
 print("Data Cleaning Complete. Rows Retained:", len(pdf))
@@ -97,6 +90,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 import re
 import plotly.express as px
+import plotly.io as pio
+os.makedirs("output", exist_ok=True)
 #Data Cleaning & Filtering
 pdf = df.filter(df["SALARY"] > 0).select("EMPLOYMENT_TYPE_NAME", "SALARY").toPandas()
 pdf["EMPLOYMENT_TYPE_NAME"] = pdf["EMPLOYMENT_TYPE_NAME"].apply(
@@ -109,7 +104,6 @@ pdf["EMPLOYMENT_TYPE_NAME"] = pd.Categorical(
     categories=sorted_employment_types, 
     ordered=True
 )
-
 #Creating the Boxplot
 fig = px.box(
     pdf,
@@ -120,8 +114,11 @@ fig = px.box(
     boxmode="group",
     points="all"
 )
+fig.update_traces(marker=dict(opacity=0.4, size=3), 
+                  line=dict(width=3, color="black"))
 fig.update_layout(
     title=dict(text="Salary Distribution by Employment Type", font=dict(size=30, family="Arial", color="black", weight="bold")),
+    margin=dict(t=100, b=80, l=80, r=80),
     xaxis=dict(
         title=dict(text="Employment Type", font=dict(size=24, family="Arial", color="black", weight="bold")),
         tickangle=0,
@@ -147,8 +144,11 @@ fig.update_layout(
     height=500,
     width=850
 )
-fig.show()
-fig.write_image("output/Q1.svg", width=850, height=500, scale=1)
+show_and_save(fig, "output/Q1.png", width=850, height=500, scale=1)
+```
+
+```{markdown}
+The box plot shows the salary distribution under different types of employment. From the graph, it can be seen that the sample size of "Full time (>32 hours)" is the largest, and the salary dispersion is also the highest, approaching $500000, indicating a wider range of job positions with salary distribution. In contrast, the sample size for “Part-time (32 hours)” is smaller, the distribution is more concentrated, and the overall level is lower; however, there are still a few high-paying outliers. And “Part-time/full-time” falls between the two, with an overall salary level higher than pure part-time but lower than full-time, and there are also a few high-salary outliers. Overall, full-time positions have the highest salary levels and the most significant fluctuations, while part-time positions are more concentrated and lower, and mixed types fall between the two.
 ```
 
 # Salary Analysis by ONET Occupation Type (Bubble Chart)
@@ -157,6 +157,7 @@ fig.write_image("output/Q1.svg", width=850, height=500, scale=1)
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 import plotly.express as px
+os.makedirs("output", exist_ok=True)
 #Spark SQL to Converting
 salary_analysis = spark.sql("""
     SELECT
@@ -196,60 +197,70 @@ fig.update_layout(
     yaxis_title="Median Salary",
     plot_bgcolor="white",
     xaxis=dict(tickangle=-45, showline=True),
-    yaxis=dict(showline=True)
+    yaxis=dict(showline=True),
+    margin=dict(t=100, b=80, l=80, r=80)
 )
-fig.show()
+show_and_save(fig, "output/Q2.png", width=1000, height=600, scale=2)
 ```
-#Salary by Education Level
+
+```{markdown}
+
+```
+# Salary by Education Level
 
 ```{python}
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when, lit
-import re
-#Educational Groups Data Setting
-lower_deg  = ["Bachelor's", "Associate", "GED", "No Education Listed", "High school"]
-higher_deg = ["Master's degree", "PhD or professional degree"]
+from pyspark.sql.functions import col, when, lit, trim, lower, regexp_replace
+import plotly.express as px
+import plotly.io as pio
+os.makedirs("output", exist_ok=True)
+#Building Educational Level Groups
+df = df.withColumn("EDU_CLEAN", lower(trim(col("EDUCATION_LEVELS_NAME"))))
 df = df.withColumn(
     "EDU_GROUP",
-    when(col("EDUCATION_LEVELS_NAME").isin(lower_deg), lit("Bachelor's or lower"))
-    .when(col("EDUCATION_LEVELS_NAME").isin(higher_deg), lit("Master's or PhD"))
+    when(col("EDU_CLEAN").rlike("master|mba|msc"), lit("Master's or PhD"))
+    .when(col("EDU_CLEAN").rlike("phd|doctor|professional"), lit("Master's or PhD"))
+    .when(col("EDU_CLEAN").rlike("bachelor|associate|ged|high\\s*school|no\\s*education"), lit("Bachelor's or lower"))
     .otherwise(lit("Other"))
 )
-df = df.withColumn("MAX_YEARS_EXPERIENCE", col("MAX_YEARS_EXPERIENCE").cast("float"))
-df = df.withColumn("Average_Salary", col("Average_Salary").cast("float"))
-df_filtered = df.filter(
-    col("MAX_YEARS_EXPERIENCE").isNotNull() & (col("MAX_YEARS_EXPERIENCE") > 0) &
-    col("Average_Salary").isNotNull() & (col("Average_Salary") > 0))
-pdf_scatter = df_filtered.toPandas()
-df_filtered = df.filter(col("EDU_GROUP").isin("Bachelor's or lower", "Master's or PhD"))
+df = df.withColumn("MAX_YEARS_EXPERIENCE", col("MAX_YEARS_EXPERIENCE").cast("double"))
+df = df.withColumn("Average_Salary",
+                   regexp_replace(col("Average_Salary"), "[$,]", "").cast("double"))
+df_filtered = (
+    df.filter((col("MAX_YEARS_EXPERIENCE") > 0) & (col("Average_Salary") > 0))
+      .filter(col("EDU_GROUP").isin("Bachelor's or lower", "Master's or PhD"))
+      .select("MAX_YEARS_EXPERIENCE","Average_Salary","EDU_GROUP","LOT_V6_SPECIALIZED_OCCUPATION_NAME")
+)
 df_pd = df_filtered.toPandas()
 
 #Creating the Scatter Plot
 fig1 = px.scatter(
-    df_pd, x="MAX_YEARS_EXPERIENCE", y="Average_Salary",
+    df_pd,
+    x="MAX_YEARS_EXPERIENCE",
+    y="Average_Salary",
     color="EDU_GROUP",
     hover_data=["LOT_V6_SPECIALIZED_OCCUPATION_NAME"],
     opacity=0.7,
-    color_discrete_sequence=["#ffb6c1", "#cb1a72ff"],
+    color_discrete_sequence=["#ffb6c1", "#cb1a72"], 
     title="Experience vs Salary by Education Level"
 )
 fig1.update_traces(marker=dict(size=7, line=dict(width=1, color="black")))
 fig1.update_layout(
-    plot_bgcolor="#f9f9f9", paper_bgcolor="#EFF5DC", 
+    plot_bgcolor="#f9f9f9", paper_bgcolor="#EFF5DC",
     font=dict(family="Segoe UI", size=14),
     title_font=dict(size=22),
     xaxis_title="Years of Experience",
     yaxis_title="Average Salary (USD)",
     legend_title="Education Group",
     hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial"),
-    margin=dict(t=70, r=80, b=60, l=60),
     xaxis=dict(gridcolor="lightgrey", tickmode="linear", dtick=1),
-    yaxis=dict(gridcolor="lightgrey")
+    yaxis=dict(gridcolor="lightgrey"),
+    margin=dict(t=100, b=80, l=80, r=80)
 )
-fig1.show()
-fig1.write_image("output/Q7.png", width=950, height=550, scale=2)
+show_and_save(fig1, "output/Q3.png", width=950, height=600, scale=2)
 ```
-#Salary by Remote Work Type
+
+# Salary by Remote Work Type
 
 ```{python}
 from pyspark.sql import SparkSession
@@ -257,6 +268,8 @@ from pyspark.sql.functions import col
 from pyspark.sql.functions import when, trim
 import numpy as np
 import plotly.express as px
+import plotly.io as pio
+os.makedirs("output", exist_ok=True)
 np.random.seed(42)
 
 #Work Types Data Setting
@@ -305,11 +318,11 @@ fig1.update_layout(
     paper_bgcolor="#E9EAFF",
     font=dict(family="Segoe UI", size=14),
     title_font=dict(size=22),
+    margin=dict(t=100, b=80, l=80, r=80),
     xaxis_title="Years of Experience",
     yaxis_title="Average Salary (USD)",
     legend_title="Remote Work Type",
     hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial"),
-    margin=dict(t=70, b=60, l=60, r=60),
     xaxis=dict(
         gridcolor="lightgrey",
         tickmode="linear",
@@ -321,5 +334,5 @@ fig1.update_layout(
     legend=dict(orientation="h", yanchor="bottom", y=-1.02, xanchor="right", x=1)
 )
 
-fig1.show()
+show_and_save(fig1, "output/Q4.png", width=950, height=550, scale=2)
 ```
