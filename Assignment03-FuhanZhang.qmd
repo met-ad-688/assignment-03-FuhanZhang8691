@@ -147,9 +147,8 @@ fig.update_layout(
 show_and_save(fig, "output/Q1.png", width=850, height=500, scale=1)
 ```
 
-```{markdown}
 The box plot shows the salary distribution under different types of employment. From the graph, it can be seen that the sample size of "Full time (>32 hours)" is the largest, and the salary dispersion is also the highest, approaching $500000, indicating a wider range of job positions with salary distribution. In contrast, the sample size for “Part-time (32 hours)” is smaller, the distribution is more concentrated, and the overall level is lower; however, there are still a few high-paying outliers. And “Part-time/full-time” falls between the two, with an overall salary level higher than pure part-time but lower than full-time, and there are also a few high-salary outliers. Overall, full-time positions have the highest salary levels and the most significant fluctuations, while part-time positions are more concentrated and lower, and mixed types fall between the two.
-```
+
 
 # Salary Analysis by ONET Occupation Type (Bubble Chart)
 
@@ -203,9 +202,8 @@ fig.update_layout(
 show_and_save(fig, "output/Q2.png", width=1000, height=600, scale=2)
 ```
 
-```{markdown}
+The bubble chart is based on SparkSQL to calculate the "Median Salary" and "Job Postings" for each ONET profession, and displays the top ten based on recruitment volume. The results show that Data Analyst has the largest bubble, ranking first, followed by General ERP Analyst/Consultant、Enterprise Architect、Oracle Consultant/Analyst  The demand for data quality analysts and healthcare analysts is relatively small. It is worth noting that the median salary of the top ten professions is almost at the same level (about 115k), and the salary difference between professions is much smaller than the difference in recruitment volume, indicating that the market lacks clear differentiation in salary for different positions, and the greater difference is reflected in the scale of job demand.
 
-```
 # Salary by Education Level
 
 ```{python}
@@ -259,6 +257,8 @@ fig1.update_layout(
 )
 show_and_save(fig1, "output/Q3.png", width=950, height=600, scale=2)
 ```
+
+The scatter plot illustrates the relationship between work experience and average salary for different educational groups. Overall, with the increase of work experience, the salaries of both educational groups show a certain upward trend, but the distribution is relatively scattered. For the "Master's or PhD" group, their average salary is generally higher than that of the "Bachelor's or Lower" group, and their advantage is more obvious. At the same time, it can be seen that the high educated population appears more frequently in the high salary range of over $200000, while the low educated population is mostly concentrated in the middle and low salary range, which is between $50000 and $150000. It can be seen that higher education not only brings higher starting salaries in career development, but may also further widen the income gap after accumulating experience.
 
 # Salary by Remote Work Type
 
@@ -336,3 +336,6 @@ fig1.update_layout(
 
 show_and_save(fig1, "output/Q4.png", width=950, height=550, scale=2)
 ```
+
+
+The scatter plot shows the relationship between work experience and average salary for different types of remote work. Overall, the salary distribution of Onsite (pink), Remote (light blue), and Hybrid (light yellow) highly overlaps in most experience ranges, indicating that remote attributes are not the core factor determining salary levels. Among them, Onsite has the largest number of positions and the widest coverage, while Remote and Hybrid have relatively fewer positions. However, in some experience periods, such as 3 and 7 years, higher salary points have emerged. With the increase of work experience, the salaries of the three types of work modes have an overall upward trend, but the differences are limited.
